@@ -2,6 +2,11 @@ package main
 
 import (
 	"flag" // https://pkg.go.dev/flag
+	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"net/rpc"
 )
 
 func main() {
@@ -27,5 +32,49 @@ func main() {
 	flag.IntVar(&r, "r", 4, "number of successors maintained by chord client")
 
 	flag.Parse()
+
+	// create a new chord client
+	if joinIP == "" || joinPort == 0 {
+		node := server(IP, port)
+		node.Create()
+	} else {
+		// join an existing chord
+		node := server(IP, port)
+		joinNode := Node{
+			Address: joinIP,
+			Port:    joinPort,
+		}
+		node.Join(&joinNode)
+	}
+
+}
+
+func server(IP string, port int) *Node {
+	node := Node{
+		Address: IP,
+		Port:    port,
+	}
+
+	rpc.Register(node)
+	rpc.HandleHTTP()
+
+	address := fmt.Sprintf("%s:%d", IP, port)
+	l, err := net.Listen("tcp", address)
+	if err != nil {
+		log.Fatal("net.Listen failed: ", err)
+	}
+	go http.Serve(l, nil)
+	return &node
+}
+
+func LookUp(fileName string) {
+
+}
+
+func StoreFile(filePath string) {
+
+}
+
+func PrintState() {
 
 }
