@@ -56,8 +56,8 @@ func (n *Node) fixFingers() {
 	two := big.NewInt(2)
 	exponent := big.NewInt(int64(n.next - 1))
 	offset := new(big.Int).Exp(two, exponent, nil) // 2^(next - 1)
+	target := new(big.Int).Add(n.Id, offset)       // n + 2^(next - 1)
 
-	target := new(big.Int).Add(n.Id, offset) // n + 2^(next - 1)
 	n.FingerTable[n.next] = n.findSuccessor(target)
 
 }
@@ -71,7 +71,12 @@ func (n *Node) checkPredecessor() {
 }
 
 func (n *Node) closestPrecedingNode(id *big.Int) *Node {
-
+	for i := m; i > 1; i-- {
+		if between(n.FingerTable[i].Id, n.Id, id) {
+			return n.FingerTable[i]
+		}
+	}
+	return n
 }
 
 func between(id, start, end *big.Int) bool {
