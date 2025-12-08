@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math/big"
 	"net"
 )
@@ -18,12 +19,12 @@ type Node struct {
 	next int
 }
 
-func (n *Node) findSuccessor(id *big.Int) *Node {
+func (n *Node) findSuccessor(id *big.Int) (bool, *Node) {
 	if between(id, n.Id, n.Successor.Id) {
-		return n.Successor
+		return true, n.Successor
 	} else {
 		nprim := n.closestPrecedingNode(id)
-		return nprim.findSuccessor(id)
+		return false, nprim
 	}
 }
 
@@ -35,7 +36,7 @@ func (n *Node) Create() {
 
 func (n *Node) Join(nprim *Node) {
 	n.Predecessor = nil
-	n.Successor = nprim.findSuccessor(n.Id)
+	_, n.Successor = nprim.findSuccessor(n.Id)
 }
 
 func (n *Node) stabilize() {
@@ -58,7 +59,9 @@ func (n *Node) fixFingers() {
 	offset := new(big.Int).Exp(two, exponent, nil) // 2^(next - 1)
 	target := new(big.Int).Add(n.Id, offset)       // n + 2^(next - 1)
 
-	n.FingerTable[n.next] = n.findSuccessor(target)
+	_, nextsuccessor := n.findSuccessor(target)
+
+	n.FingerTable[n.next] = nextsuccessor
 
 }
 
@@ -96,17 +99,17 @@ func (n *Node) notify(nprim *Node) {
 	}
 }
 
-
 func find(Id *big.Int, start *Node) *Node {
-	found, nextNode = false, start
-	 i = 0
-	 for !found && i < 5 {
-	 	found, nextNode = nextNode.findSuccessor(Id)
+	found, nextNode := false, start
+	i := 0
+	for !found && i < 5 {
+		found, nextNode = nextNode.findSuccessor(Id)
 		i += 1
-	 }
-	if found{
+	}
+	if found {
 		return nextNode
 	} else {
-		return Node{}
+		fmt.Println("could not find node!!!")
+		return nil
 	}
 }
