@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/rpc"
 	"path/filepath"
+	"time"
 )
 
 var node *Node
@@ -40,11 +41,11 @@ func main() {
 
 	// create a new chord client
 	if joinIP == "" || joinPort == 0 {
-		node := server(IP, port)
+		node = server(IP, port)
 		node.Create()
 	} else {
 		// join an existing chord
-		node := server(IP, port)
+		node = server(IP, port)
 		joinNode := Node{
 			Address: joinIP,
 			Port:    joinPort,
@@ -105,24 +106,28 @@ func hashString(elt string) *big.Int {
 	return new(big.Int).SetBytes(hasher.Sum(nil))
 }
 
-func StabilizeRoutine(time int) {
+func StabilizeRoutine(duration int) {
 
 	for {
-
+		time.Sleep(time.Millisecond * time.Duration(duration))
+		node.stabilize()
 	}
 }
 
-func FixFingersRoutine(time int) {
+func FixFingersRoutine(duration int) {
 
 	for {
-
+		time.Sleep(time.Millisecond * time.Duration(duration))
+		node.fixFingers()
 	}
 
 }
 
-func CheckPredecessorRoutine(time int) {
+func CheckPredecessorRoutine(duration int) {
 
 	for {
+		time.Sleep(time.Millisecond * time.Duration(duration))
+		node.checkPredecessor()
 	}
 
 }
