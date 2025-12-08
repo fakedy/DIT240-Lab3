@@ -95,3 +95,18 @@ func (n *Node) notify(nprim *Node) {
 		n.Predecessor = nprim
 	}
 }
+
+
+func find(Id *big.Int, start *Node) *Node {
+	found, nextNode = false, start
+	 i = 0
+	 for !found && i < 5 {
+	 	found, nextNode = nextNode.findSuccessor(Id)
+		i += 1
+	 }
+	if found{
+		return nextNode
+	} else {
+		return Node{}
+	}
+}
