@@ -51,6 +51,10 @@ func main() {
 		node.Join(&joinNode)
 	}
 
+	go StabilizeRoutine(ts)
+	go FixFingersRoutine(tff)
+	go CheckPredecessorRoutine(tcp)
+
 }
 
 func server(IP string, port int) *Node {
@@ -117,7 +121,6 @@ func FixFingersRoutine(time int) {
 func CheckPredecessorRoutine(time int) {
 
 	for {
-
 	}
 
 }
