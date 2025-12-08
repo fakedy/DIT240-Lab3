@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/rpc"
+	"path/filepath"
 )
 
 var node *Node
@@ -90,6 +91,7 @@ func LookUp(fileName string) {
 }
 
 func StoreFile(filePath string) {
+	filename := filepath.Base(filePath)
 
 }
 
