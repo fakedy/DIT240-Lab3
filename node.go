@@ -16,6 +16,8 @@ type Node struct {
 	Predecessor *Node
 	FingerTable []*Node
 
+	bucket map[*big.Int]string
+
 	next int
 }
 
