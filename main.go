@@ -11,6 +11,8 @@ import (
 	"net/rpc"
 )
 
+var node *Node
+
 func main() {
 	// somehow take in arguments
 	var (
@@ -71,8 +73,15 @@ func server(IP string, port int) *Node {
 
 func LookUp(fileName string) {
 	hash := hashString(fileName)
+	found := find(hash, node)
 
-	find(hash)
+	if found != nil {
+		fmt.Printf("Node ID: %d", node.Id)
+		fmt.Printf("Node IP: %s", node.Address)
+		fmt.Printf("Node Port: %d", node.Port)
+	} else {
+		fmt.Printf("Couldn't find file")
+	}
 
 }
 
