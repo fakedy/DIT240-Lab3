@@ -98,3 +98,26 @@ func hashString(elt string) *big.Int {
 	hasher.Write([]byte(elt))
 	return new(big.Int).SetBytes(hasher.Sum(nil))
 }
+
+func StabilizeRoutine(time int) {
+
+	for {
+
+	}
+}
+
+func FixFingersRoutine(time int) {
+
+	for {
+
+	}
+
+}
+
+func CheckPredecessorRoutine(time int) {
+
+	for {
+
+	}
+
+}
