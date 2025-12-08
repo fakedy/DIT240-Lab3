@@ -1,9 +1,11 @@
 package main
 
 import (
+	"crypto/sha1"
 	"flag" // https://pkg.go.dev/flag
 	"fmt"
 	"log"
+	"math/big"
 	"net"
 	"net/http"
 	"net/rpc"
@@ -71,7 +73,6 @@ func LookUp(fileName string) {
 	hasher := sha1.New()
 	hasher.Write([]byte(fileName))
 	hash := new(big.Int).SetBytes(hasher.Sum(nil))
-
 
 }
 
