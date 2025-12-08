@@ -68,6 +68,10 @@ func server(IP string, port int) *Node {
 }
 
 func LookUp(fileName string) {
+	hasher := sha1.New()
+	hasher.Write([]byte(fileName))
+	hash := new(big.Int).SetBytes(hasher.Sum(nil))
+
 
 }
 
