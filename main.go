@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/sha1"
 	"flag" // https://pkg.go.dev/flag
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/rpc"
+	"os"
 	"path/filepath"
 	"time"
 )
@@ -16,6 +18,7 @@ import (
 var node *Node
 
 func main() {
+
 	// somehow take in arguments
 	var (
 		IP       string
@@ -56,6 +59,12 @@ func main() {
 	go StabilizeRoutine(ts)
 	go FixFingersRoutine(tff)
 	go CheckPredecessorRoutine(tcp)
+
+	scanner := bufio.NewScanner(os.Stdin)
+	fmt.Print("> ")
+	for scanner.Scan() {
+
+	}
 
 }
 
@@ -111,6 +120,7 @@ func StabilizeRoutine(duration int) {
 	for {
 		time.Sleep(time.Millisecond * time.Duration(duration))
 		node.stabilize()
+		fmt.Println("")
 	}
 }
 
