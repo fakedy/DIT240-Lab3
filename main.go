@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/rpc"
 	"os"
-	"path/filepath"
 	"time"
 )
 
@@ -46,6 +45,7 @@ func main() {
 	if joinIP == "" || joinPort == 0 {
 		node = server(IP, port)
 		node.Create()
+		node.Join()
 	} else {
 		// join an existing chord
 		node = server(IP, port)
@@ -101,7 +101,7 @@ func LookUp(fileName string) {
 }
 
 func StoreFile(filePath string) {
-	filename := filepath.Base(filePath)
+	//filename := filepath.Base(filePath)
 
 }
 

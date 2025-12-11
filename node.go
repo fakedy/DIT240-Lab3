@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"time"
 )
 
-const m = 3
+const m = 3 // finger table entries
 
 type Node struct {
 	Address     string
@@ -31,8 +32,11 @@ func (n *Node) findSuccessor(id *big.Int) (bool, *Node) {
 }
 
 func (n *Node) Create() {
+	n.Id = big.NewInt(0) // temp to prevent crash, we need to actually assign the real id
 	n.Predecessor = nil
 	n.Successor = n
+	n.next = 0
+	n.FingerTable = make([]*Node, m)
 
 }
 
@@ -44,20 +48,16 @@ func (n *Node) Join(nprim *Node) {
 func (n *Node) stabilize() {
 	x := n.Successor.Predecessor
 
-	if between(x.Id, n.Id, n.Successor.Id) {
-		n.Successor = x
+	if x != nil && between(x.Id, n.Id, n.Successor.Id) { // if x.id is between n.Id and n.successor.ID
+		n.Successor = x // update our succesor to the one that was between
 	}
 	n.Successor.notify(n)
 }
 
 func (n *Node) fixFingers() {
-	n.next = n.next + 1
-	if n.next > m {
-		n.next = 1
-	}
 
 	two := big.NewInt(2)
-	exponent := big.NewInt(int64(n.next - 1))
+	exponent := big.NewInt(int64(n.next))
 	offset := new(big.Int).Exp(two, exponent, nil) // 2^(next - 1)
 	target := new(big.Int).Add(n.Id, offset)       // n + 2^(next - 1)
 
@@ -65,14 +65,22 @@ func (n *Node) fixFingers() {
 
 	n.FingerTable[n.next] = nextsuccessor
 
+	n.next = n.next + 1
+	if n.next >= m {
+		n.next = 0
+	}
+
 }
 
 func (n *Node) checkPredecessor() {
-	c, err := net.Dial("tcp", n.Predecessor.Address)
-	if err != nil {
-		n.Predecessor = nil
+	if n.Predecessor != nil {
+		c, err := net.DialTimeout("tcp", n.Predecessor.Address, 5*time.Second)
+		if err != nil {
+			n.Predecessor = nil
+			return
+		}
+		c.Close()
 	}
-	defer c.Close()
 }
 
 func (n *Node) closestPrecedingNode(id *big.Int) *Node {
