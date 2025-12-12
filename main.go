@@ -191,7 +191,38 @@ func StoreFile(filePath string) {
 }
 
 func PrintState() {
-	
+	// Own node information
+	fmt.Println("---Local Node---")
+	fmt.Println("ID: 	%s\n", node.Id)
+	fmt.Println("Addr:  %s:%d", node.Address, node.Port)
+
+	// Successors list information
+	fmt.Println("\n---Successor List---")
+	if node.Successor != nil{
+		fmt.Printf("[0] ID: %s | %s:%d\n", node.Successor.Id, node.Successor.Address, node.Successor.Port)
+	} else {
+		fmt.Println("[0] nil")
+	}
+
+	// Finger table information
+	fmt.Println("\n---Finger Table---")
+	for i, finger := range node.FingerTable{
+		if finger != nil{
+			fmt.Printf("[%d] ID: %s | %s:%d", i, finger.Id, finger.Address, finger.Port)
+		} else {
+			fmt.Printf("[%d] nil", i)
+		}
+	}
+
+	// Stored files
+	fmt.Println("\n---Stored Files---")
+	if len(node.bucket) == 0{
+		fmt.Println("Empty")
+	} else {
+		for key, content := range node.bucket {
+			fmt.Printf("Key: %s | Size: %d bytes\n", key, len(content))
+		}
+	}
 }
 
 func hashString(elt string) *big.Int {
