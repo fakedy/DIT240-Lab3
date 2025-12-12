@@ -4,10 +4,21 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"sync"
 	"time"
 )
 
 const m = 3 // finger table entries
+
+type StoreArg struct {
+	Key         *big.Int
+	FileContent []byte
+}
+
+type StoreReply struct {
+	Success bool
+	Err     string
+}
 
 type Node struct {
 	Address     string
@@ -17,12 +28,26 @@ type Node struct {
 	Predecessor *Node
 	FingerTable []*Node
 
-	bucket map[*big.Int]string
+	bucket map[string][]byte
 
 	next int
+
+	mu sync.Mutex
 }
 
 func (n *Node) findSuccessor(id *big.Int) (bool, *Node) {
+	if(id == nil){
+		fmt.Println("id is nil")
+	}
+	if(n.Id == nil){
+		fmt.Println("n.id is nil")
+	}
+
+	// crash because n.Successor is nil
+	if(n.Successor.Id == nil){
+		fmt.Println("n.Successor.Id is nil")
+	}
+
 	if between(id, n.Id, n.Successor.Id) {
 		return true, n.Successor
 	} else {
@@ -32,6 +57,7 @@ func (n *Node) findSuccessor(id *big.Int) (bool, *Node) {
 }
 
 func (n *Node) Create() {
+
 	n.Id = big.NewInt(0) // temp to prevent crash, we need to actually assign the real id
 	n.Predecessor = nil
 	n.Successor = n
@@ -44,6 +70,8 @@ func (n *Node) Join(nprim *Node) {
 	n.Predecessor = nil
 	_, n.Successor = nprim.findSuccessor(n.Id)
 }
+
+
 
 func (n *Node) stabilize() {
 	x := n.Successor.Predecessor
@@ -84,9 +112,11 @@ func (n *Node) checkPredecessor() {
 }
 
 func (n *Node) closestPrecedingNode(id *big.Int) *Node {
-	for i := m; i > 1; i-- {
-		if between(n.FingerTable[i].Id, n.Id, id) {
-			return n.FingerTable[i]
+	for i := m-1; i >= 0; i-- {
+		if n.FingerTable[i] != nil {
+			if between(n.FingerTable[i].Id, n.Id, id) {
+				return n.FingerTable[i]
+			}
 		}
 	}
 	return n
@@ -122,4 +152,23 @@ func find(Id *big.Int, start *Node) *Node {
 		fmt.Println("could not find node!!!")
 		return nil
 	}
+}
+
+func (n *Node) Put(args *StoreArg, reply *StoreReply) error {
+	n.Store(args.Key, args.FileContent)
+
+	reply.Success = true
+	return nil
+}
+
+func (n *Node) Store(key *big.Int, data []byte) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if n.bucket == nil {
+		n.bucket = make(map[string][]byte)
+	}
+
+	str := fmt.Sprintf("%d", key)
+	n.bucket[str] = data
 }
