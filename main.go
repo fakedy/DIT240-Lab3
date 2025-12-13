@@ -111,16 +111,18 @@ func server(IP string, port int) *Node {
 	if(i != ""){
 		ipPortHash = hashString(i)
 	}
+
 	node := Node{
 		Address: IP,
 		Port:    port,
 		Id:      ipPortHash,
 		bucket:  make(map[string][]byte),
+		FingerTable: make([]*Node, m),
 		Successor: nil,
 		Predecessor: nil,
 	}
 
-	rpc.Register(node)
+	rpc.Register(&node)
 	rpc.HandleHTTP()
 
 	address := fmt.Sprintf("%s:%d", IP, port)
@@ -137,9 +139,9 @@ func LookUp(fileName string) {
 	found := find(hash, node)
 
 	if found != nil {
-		fmt.Printf("Node ID: %d\n", node.Id)
-		fmt.Printf("Node IP: %s\n", node.Address)
-		fmt.Printf("Node Port: %d\n", node.Port)
+		fmt.Printf("Node ID: %d\n", found.Id)
+		fmt.Printf("Node IP: %s\n", found.Address)
+		fmt.Printf("Node Port: %d\n", found.Port)
 	} else {
 		fmt.Printf("Couldn't find file\n")
 	}
@@ -150,14 +152,19 @@ func StoreFile(filePath string) {
 	// Read file content
 	data, err := os.ReadFile(filePath)
 
+	if err != nil {
+		fmt.Printf("Failed to read file\n")
+		return
+	}
 	// hash the filename to get the key
 	filename := filepath.Base(filePath)
 	key := hashString(filename)
 
 	// Find the responsible node for the key
-	_, successor := node.findSuccessor(key)
-	if err != nil {
+	successor := find(key, node)
+	if successor == nil {
 		fmt.Printf("Cannot find successor\n")
+		return
 	}
 
 	// if the successor is self
@@ -173,17 +180,15 @@ func StoreFile(filePath string) {
 		}
 		var reply StoreReply
 
-		// RPC calls
-		client, err := rpc.DialHTTP("tcp", fmt.Sprintf("%s:%d", successor.Address, successor.Port))
-		if err != nil {
-			fmt.Printf("Dial failed\n")
-		}
+		address := fmt.Sprintf("%s:%d", successor.Address, successor.Port)
+		ok := call("Node.Put", address, &args, &reply)
 
-		err = client.Call("node.Put", &args, &reply)
-		if err != nil {
-			fmt.Printf("RPC call failed\n")
-		} else if !reply.Success {
-			fmt.Printf("Store failed\n")
+		if !ok {
+			fmt.Printf("RPC store failed")
+		} else if !reply.Success{
+			fmt.Printf("Failure")
+		} else {
+			fmt.Printf("File stored succesfully")
 		}
 
 	}
@@ -193,8 +198,8 @@ func StoreFile(filePath string) {
 func PrintState() {
 	// Own node information
 	fmt.Println("---Local Node---")
-	fmt.Println("ID: 	%s\n", node.Id)
-	fmt.Println("Addr:  %s:%d", node.Address, node.Port)
+	fmt.Printf("ID: 	%s\n", node.Id)
+	fmt.Printf("Addr:  %s:%d", node.Address, node.Port)
 
 	// Successors list information
 	fmt.Println("\n---Successor List---")
@@ -204,11 +209,18 @@ func PrintState() {
 		fmt.Println("[0] nil")
 	}
 
+	fmt.Println("\n---Predecessor List---")
+	if(node.Predecessor != nil) {
+		fmt.Printf("[0] ID: %s | %s:%d\n", node.Predecessor.Id, node.Predecessor.Address, node.Predecessor.Port)
+	} else {
+		fmt.Println("[0] nil")
+	}
+
 	// Finger table information
 	fmt.Println("\n---Finger Table---")
 	for i, finger := range node.FingerTable{
 		if finger != nil{
-			fmt.Printf("[%d] ID: %s | %s:%d", i, finger.Id, finger.Address, finger.Port)
+			fmt.Printf("[%d] ID: %s | %s:%d\n", i, finger.Id, finger.Address, finger.Port)
 		} else {
 			fmt.Printf("[%d] nil", i)
 		}
@@ -257,18 +269,3 @@ func CheckPredecessorRoutine(duration int) {
 
 }
 
-func call(rpcname string, args interface{}, reply interface{}) bool {
-	c, err := rpc.DialHTTP("tcp", "127.0.0.1"+":1234")
-	if err != nil {
-		log.Fatal("dialing:", err)
-	}
-	defer c.Close()
-
-	err = c.Call(rpcname, args, reply)
-	if err == nil {
-		return true
-	}
-
-	fmt.Println(err)
-	return false
-}

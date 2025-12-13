@@ -6,6 +6,8 @@ import (
 	"net"
 	"sync"
 	"time"
+	"net/rpc"
+	"log"
 )
 
 const m = 3 // finger table entries
@@ -35,16 +37,100 @@ type Node struct {
 	mu sync.Mutex
 }
 
-func (n *Node) findSuccessor(id *big.Int) (bool, *Node) {
-	if(id == nil){
-		fmt.Println("id is nil")
-	}
-	if(n.Id == nil){
-		fmt.Println("n.id is nil")
+type NodeDetails struct {
+	Address string
+	Port 	int
+	Id 		*big.Int
+}
+
+type FindSuccArgs struct{
+	Id *big.Int
+}
+
+type FindSuccReply struct{
+	Found bool
+	Node  NodeDetails
+}
+
+type GetPredArgs struct {}
+
+type GetPredReply struct {
+	Node NodeDetails
+}
+
+type NotifyArgs struct {
+	Node NodeDetails
+}
+
+type NotifyReply struct {
+	Success bool
+}
+
+func (n *Node) findSucc(id *big.Int) (bool, *Node){
+
+	// make rpc call to the target node findsuccessor function
+	if(n.Address == node.Address && n.Port == node.Port){
+		return n.findSuccessor(id)
 	}
 
+	args := FindSuccArgs{Id: id}
+	reply := FindSuccReply{}
+	
+	add := fmt.Sprintf("%s:%d", n.Address, n.Port)
+	ok :=call("Node.FindSuccRPC", add, args, &reply);
+	if !ok {
+		return false, nil
+	}
+
+	// Convert the full node to only important details
+	remoteNode := &Node {
+		Address: reply.Node.Address,
+		Port:	 reply.Node.Port,
+		Id: 	 reply.Node.Id,
+	}
+
+	return reply.Found, remoteNode
+
+}
+
+func (n *Node) FindSuccRPC(args *FindSuccArgs, reply *FindSuccReply) error{
+	found, nextNode := n.findSuccessor(args.Id)
+	reply.Found = found
+	
+	// fill reply data
+	if nextNode != nil {
+		reply.Node = NodeDetails{
+			Address: nextNode.Address,
+			Port:	 nextNode.Port,
+			Id: 	 nextNode.Id,
+		}
+	}
+
+	return nil
+}	
+
+//address should be IP:port
+func call(method string, adress string, args interface{}, reply interface{}) bool {
+	c, err := rpc.DialHTTP("tcp", adress)
+	if err != nil {
+		log.Fatal("dialing:", err)
+	}
+	defer c.Close()
+
+	err = c.Call(method, args, reply)
+	if err == nil {
+		return true
+	}
+
+	fmt.Println(err)
+	return false
+}
+
+func (n *Node) findSuccessor(id *big.Int) (bool, *Node) {
+
+
 	// crash because n.Successor is nil
-	if(n.Successor.Id == nil){
+	if(n.Successor == nil){
 		fmt.Println("n.Successor.Id is nil")
 	}
 
@@ -58,28 +144,29 @@ func (n *Node) findSuccessor(id *big.Int) (bool, *Node) {
 
 func (n *Node) Create() {
 
-	n.Id = big.NewInt(0) // temp to prevent crash, we need to actually assign the real id
+	//n.Id = big.NewInt(0) // temp to prevent crash, we need to actually assign the real id
 	n.Predecessor = nil
 	n.Successor = n
 	n.next = 0
-	n.FingerTable = make([]*Node, m)
+	//n.FingerTable = make([]*Node, m)
 
 }
 
 func (n *Node) Join(nprim *Node) {
 	n.Predecessor = nil
-	_, n.Successor = nprim.findSuccessor(n.Id)
+
+	_, n.Successor = nprim.findSucc(n.Id)
 }
 
 
 
 func (n *Node) stabilize() {
-	x := n.Successor.Predecessor
+	x := n.Successor.getPredecessor()
 
 	if x != nil && between(x.Id, n.Id, n.Successor.Id) { // if x.id is between n.Id and n.successor.ID
 		n.Successor = x // update our succesor to the one that was between
 	}
-	n.Successor.notify(n)
+	n.Successor.notifyRemote(n)
 }
 
 func (n *Node) fixFingers() {
@@ -89,7 +176,7 @@ func (n *Node) fixFingers() {
 	offset := new(big.Int).Exp(two, exponent, nil) // 2^(next - 1)
 	target := new(big.Int).Add(n.Id, offset)       // n + 2^(next - 1)
 
-	_, nextsuccessor := n.findSuccessor(target)
+	_, nextsuccessor := n.findSucc(target)
 
 	n.FingerTable[n.next] = nextsuccessor
 
@@ -102,7 +189,8 @@ func (n *Node) fixFingers() {
 
 func (n *Node) checkPredecessor() {
 	if n.Predecessor != nil {
-		c, err := net.DialTimeout("tcp", n.Predecessor.Address, 5*time.Second)
+		add := fmt.Sprintf("%s:%d", n.Address, n.Port)
+		c, err := net.DialTimeout("tcp", add, 5*time.Second)
 		if err != nil {
 			n.Predecessor = nil
 			return
@@ -142,8 +230,8 @@ func (n *Node) notify(nprim *Node) {
 func find(Id *big.Int, start *Node) *Node {
 	found, nextNode := false, start
 	i := 0
-	for !found && i < 5 {
-		found, nextNode = nextNode.findSuccessor(Id)
+	for !found && i < 10 {
+		found, nextNode = nextNode.findSucc(Id)
 		i += 1
 	}
 	if found {
@@ -153,6 +241,7 @@ func find(Id *big.Int, start *Node) *Node {
 		return nil
 	}
 }
+
 
 func (n *Node) Put(args *StoreArg, reply *StoreReply) error {
 	n.Store(args.Key, args.FileContent)
@@ -171,4 +260,86 @@ func (n *Node) Store(key *big.Int, data []byte) {
 
 	str := fmt.Sprintf("%d", key)
 	n.bucket[str] = data
+}
+
+
+func (n *Node) GetPredecessorRPC(args *GetPredArgs, reply *GetPredReply) error {
+	// Lock before accessing state
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	
+	if n.Predecessor != nil {
+		reply.Node = NodeDetails {
+			Address: n.Predecessor.Address,
+			Port:	 n.Predecessor.Port,
+			Id:		 n.Predecessor.Id,
+		}
+	} else {
+		reply.Node = NodeDetails {
+			Address: "",
+			Port:	 0,
+			Id:		 nil,
+		}
+	}
+
+	return nil
+}
+
+
+func (n *Node) getPredecessor() *Node{
+	if n.Address == node.Address && n.Port == node.Port {
+		return n.Predecessor
+	}
+
+	args := GetPredArgs {}
+
+	reply := GetPredReply{}
+
+	address := fmt.Sprintf("%s:%d", n.Address, n.Port)
+	ok := call("Node.GetPredecessorRPC", address, &args, &reply)
+	if !ok || reply.Node.Address == "" {
+		return nil
+	}
+
+	return &Node{
+		Address:  reply.Node.Address,
+		Port:	  reply.Node.Port,
+		Id:		  reply.Node.Id,
+	}
+}
+
+
+func (n *Node) notifyRemote(nprim *Node){
+	if n.Address == node.Address && n.Port == node.Port {
+		n.notify(nprim)
+		return
+	}
+
+	args := NotifyArgs {
+		Node: NodeDetails {
+			Address: nprim.Address,
+			Port:    nprim.Port,
+			Id:      nprim.Id,
+		},
+	}
+
+	reply := NotifyReply{}
+
+	address := fmt.Sprintf("%s:%d", n.Address, n.Port)
+	call("Node.NotifyRPC", address, &args, &reply)
+}
+
+func (n *Node) NotifyRPC(args *NotifyArgs, reply *NotifyReply) error {
+	updatedPred := &Node{
+		Address: args.Node.Address,
+		Port:    args.Node.Port,
+		Id:      args.Node.Id,
+	}
+
+	n.notify(updatedPred)
+
+	reply.Success = true
+	return nil
+	
 }
