@@ -118,9 +118,9 @@ func server(IP string, port int) *Node {
 		Id:      ipPortHash,
 		bucket:  make(map[string][]byte),
 		FingerTable: make([]*Node, m),
-		Successor: nil,
 		Predecessor: nil,
 	}
+	node.Successor = &node
 
 	rpc.Register(&node)
 	rpc.HandleHTTP()
