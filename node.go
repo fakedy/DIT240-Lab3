@@ -167,7 +167,7 @@ func (n *Node) Join(nprim *Node) {
 	args := GetFilesArgs{n.Id}
 	reply := GetFilesReply{}
 
-	add := fmt.Sprintf("%s:%d", n.Address, n.Port)
+	add := fmt.Sprintf("%s:%d", n.Successor.Address, n.Successor.Port)
 	ok := call("Node.GetFilesPredRPC", add, &args, &reply)
 	if !ok {
 		return
@@ -280,8 +280,15 @@ func (n *Node) getFilesPred(id *big.Int) map[string][]byte {
 	mfiles := make(map[string][]byte)
 
 	for key, value := range n.bucket {
-		if hashString(key).Cmp(id) <= 0 {
+		keyBig := new(big.Int)
+		keyBig.SetString(key, 10)
+
+		if keyBig.Cmp(id) <= 0 {
 			mfiles[key] = value
+		} else {
+			maggot := fmt.Sprintf("BRUH %d is bigger than %d no cap!!!", id, keyBig)
+			fmt.Printf(maggot)
+
 		}
 
 	}
@@ -295,6 +302,7 @@ func (n *Node) GetFilesPredRPC(args *GetFilesArgs, reply *GetFilesReply) error {
 	defer n.mu.Unlock()
 
 	if len(n.bucket) == 0 {
+		fmt.Printf("bucket is empty")
 		return nil
 
 	} else {
