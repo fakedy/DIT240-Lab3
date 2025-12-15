@@ -32,6 +32,7 @@ var (
 )
 
 func main() {
+	//flags
 
 	flag.StringVar(&IP, "a", "127.0.0.1", "Chord IP Address")
 	flag.IntVar(&port, "p", 8080, "Chord Port")
@@ -62,6 +63,8 @@ func main() {
 	go StabilizeRoutine(ts)
 	go FixFingersRoutine(tff)
 	go CheckPredecessorRoutine(tcp)
+
+	//interactive shell command to do stuff
 	fmt.Print("> ")
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
@@ -106,7 +109,9 @@ func main() {
 
 }
 
+// start a node and initialze all important fields
 func server(IP string, port int) *Node {
+	// set id by hashing adress
 	ipPortHash := hashString(fmt.Sprintf("%s:%d", IP, port))
 	if i != "" {
 		ipPortHash = hashString(i)
@@ -120,8 +125,10 @@ func server(IP string, port int) *Node {
 		FingerTable: make([]*Node, m),
 		Predecessor: nil,
 	}
+	//set successor to itself will be fixed later when stabilize is called if more than 1 node exists
 	node.Successor = &node
 
+	//start the rpc server
 	rpc.Register(&node)
 	rpc.HandleHTTP()
 
@@ -134,6 +141,7 @@ func server(IP string, port int) *Node {
 	return &node
 }
 
+// Finds the responsible node for a file
 func LookUp(fileName string) {
 	hash := hashString(fileName)
 	found := find(hash, node)
@@ -154,6 +162,7 @@ func LookUp(fileName string) {
 
 }
 
+// Reads a local file and stores it  to
 func StoreFile(filePath string) {
 	// Read file content
 	data, err := os.ReadFile(filePath)
@@ -173,7 +182,7 @@ func StoreFile(filePath string) {
 		return
 	}
 
-	// if the successor is self
+	// Store the file remotely or locally
 	if successor.Address == node.Address && successor.Port == node.Port {
 		// storage method
 		node.Store(key, data)
@@ -191,17 +200,18 @@ func StoreFile(filePath string) {
 		ok := call("Node.Put", address, &args, &reply)
 
 		if !ok {
-			fmt.Printf("RPC store failed")
+			fmt.Printf("RPC store failed\n")
 		} else if !reply.Success {
-			fmt.Printf("Failure")
+			fmt.Printf("Failure\n")
 		} else {
-			fmt.Printf("File remotely stored  succesfully")
+			fmt.Printf("File remotely stored succesfully\n")
 		}
 
 	}
 
 }
 
+// Displays current state info about the node
 func PrintState() {
 	// Own node information
 	fmt.Println("---Local Node---")
@@ -244,12 +254,16 @@ func PrintState() {
 	}
 }
 
+// hash function using sha1 to hash strings into big int
 func hashString(elt string) *big.Int {
 	hasher := sha1.New()
 	hasher.Write([]byte(elt))
 	return new(big.Int).SetBytes(hasher.Sum(nil))
 }
 
+// ------  run by threads for concurrent function calls -------
+
+// function to periodically stabilize
 func StabilizeRoutine(duration int) {
 
 	for {
@@ -258,6 +272,7 @@ func StabilizeRoutine(duration int) {
 	}
 }
 
+// function to periodically fix fingers
 func FixFingersRoutine(duration int) {
 
 	for {
@@ -267,6 +282,7 @@ func FixFingersRoutine(duration int) {
 
 }
 
+// function to periodically check predecessors
 func CheckPredecessorRoutine(duration int) {
 
 	for {

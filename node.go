@@ -84,6 +84,7 @@ type GetFileArgs struct {
 	FileName string
 }
 
+// function to check if its local or need RPC
 func (n *Node) findSucc(id *big.Int) (bool, *Node) {
 
 	// make rpc call to the target node findsuccessor function
@@ -147,15 +148,17 @@ func call(method string, adress string, args interface{}, reply interface{}) boo
 
 func (n *Node) findSuccessor(id *big.Int) (bool, *Node) {
 
-	//check if id is
+	//check if id is between current node and successor
 	if between(id, n.Id, n.Successor.Id) {
 		return true, n.Successor
 	} else {
+		// Otherwise, find the closest node to id
 		nprim := n.closestPrecedingNode(id)
 		return false, nprim
 	}
 }
 
+// create node used in creating the actual chord ring only
 func (n *Node) Create() {
 
 	n.Predecessor = nil
@@ -164,11 +167,14 @@ func (n *Node) Create() {
 
 }
 
+// join is used instead of create when joining an existing chord ring
 func (n *Node) Join(nprim *Node) {
 	n.Predecessor = nil
 
+	//use find successor to find our most suitable successor
 	_, n.Successor = nprim.findSucc(n.Id)
 
+	//check if out successor has any files that are more suitable for current node
 	args := GetFilesArgs{n.Id}
 	reply := GetFilesReply{}
 
@@ -178,6 +184,7 @@ func (n *Node) Join(nprim *Node) {
 		return
 	}
 
+	//get thos file;;;
 	for key, value := range reply.Files {
 		n.bucket[key] = value
 	}
@@ -197,15 +204,26 @@ func (n *Node) stabilize() {
 	n.Successor.notifyRemote(n)
 }
 
+// Updates finger table entries
 func (n *Node) fixFingers() {
 
+	// take our id and add a offset
 	two := big.NewInt(2)
 	exponent := big.NewInt(int64(n.next))
 	offset := new(big.Int).Exp(two, exponent, nil) // 2^(next - 1)
-	target := new(big.Int).Add(n.Id, offset)       // n + 2^(next - 1)
 
+	sum := new(big.Int).Add(n.Id, offset) // n + 2^(next - 1)
+
+	// Calculate ring size
+	maxVal := new(big.Int).Exp(two, big.NewInt(m), nil)
+
+	// Handle wrap-around, so it works like a circle
+	target := new(big.Int).Mod(sum, maxVal)
+
+	//find the successor for this target
 	_, nextsuccessor := n.findSucc(target)
 
+	//append to fingertable
 	n.FingerTable[n.next] = nextsuccessor
 
 	n.next = n.next + 1
@@ -285,6 +303,7 @@ func find(Id *big.Int, start *Node) *Node {
 	}
 }
 
+// RPC handler for storing a file
 func (n *Node) Put(args *StoreArg, reply *StoreReply) error {
 	n.Store(args.Key, args.FileContent)
 
@@ -331,7 +350,13 @@ func (n *Node) getFile(targetNode *Node, fileName string) []byte {
 	if targetNode.Id == n.Id {
 		n.mu.Lock()
 		defer n.mu.Unlock()
-		return n.bucket[keyStr]
+		data, exists := n.bucket[keyStr]
+		if exists {
+			return data
+		} else {
+			fmt.Println("File doesnt exist")
+			return data
+		}
 	}
 
 	args := GetFileArgs{keyStr}
