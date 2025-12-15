@@ -142,6 +142,12 @@ func LookUp(fileName string) {
 		fmt.Printf("Node ID: %d\n", found.Id)
 		fmt.Printf("Node IP: %s\n", found.Address)
 		fmt.Printf("Node Port: %d\n", found.Port)
+
+		// get file content
+		data := node.getFile(found, fileName)
+		fmt.Print(data)
+		fmt.Println("")
+
 	} else {
 		fmt.Printf("Couldn't find file\n")
 	}

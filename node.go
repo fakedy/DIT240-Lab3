@@ -11,16 +11,6 @@ import (
 
 const m = 3 // finger table entries
 
-type StoreArg struct {
-	Key         *big.Int
-	FileContent []byte
-}
-
-type StoreReply struct {
-	Success bool
-	Err     string
-}
-
 type Node struct {
 	Address     string
 	Port        int
@@ -34,6 +24,18 @@ type Node struct {
 	next int
 
 	mu sync.Mutex
+}
+
+// structs for RPC
+
+type StoreArg struct {
+	Key         *big.Int
+	FileContent []byte
+}
+
+type StoreReply struct {
+	Success bool
+	Err     string
 }
 
 type NodeDetails struct {
@@ -51,7 +53,8 @@ type FindSuccReply struct {
 	Node  NodeDetails
 }
 
-type GetPredArgs struct{}
+type GetPredArgs struct {
+}
 
 type GetPredReply struct {
 	Node NodeDetails
@@ -71,6 +74,14 @@ type GetFilesArgs struct {
 
 type GetFilesReply struct {
 	Files map[string][]byte
+}
+
+type GetFileReply struct {
+	Data []byte
+}
+
+type GetFileArgs struct {
+	FileName string
 }
 
 func (n *Node) findSucc(id *big.Int) (bool, *Node) {
@@ -136,11 +147,7 @@ func call(method string, adress string, args interface{}, reply interface{}) boo
 
 func (n *Node) findSuccessor(id *big.Int) (bool, *Node) {
 
-	// crash because n.Successor is nil
-	if n.Successor == nil {
-		fmt.Println("n.Successor.Id is nil")
-	}
-
+	//check if id is
 	if between(id, n.Id, n.Successor.Id) {
 		return true, n.Successor
 	} else {
@@ -151,11 +158,9 @@ func (n *Node) findSuccessor(id *big.Int) (bool, *Node) {
 
 func (n *Node) Create() {
 
-	//n.Id = big.NewInt(0) // temp to prevent crash, we need to actually assign the real id
 	n.Predecessor = nil
 	n.Successor = n
 	n.next = 0
-	//n.FingerTable = make([]*Node, m)
 
 }
 
@@ -180,11 +185,15 @@ func (n *Node) Join(nprim *Node) {
 }
 
 func (n *Node) stabilize() {
+	// get the current successors predecessor
 	x := n.Successor.getPredecessor()
 
+	// if x is a better successor, we update the successor to x
 	if x != nil && between(x.Id, n.Id, n.Successor.Id) { // if x.id is between n.Id and n.successor.ID
 		n.Successor = x // update our succesor to the one that was between
 	}
+
+	// Tell successor that we are the predecessor
 	n.Successor.notifyRemote(n)
 }
 
@@ -206,6 +215,8 @@ func (n *Node) fixFingers() {
 
 }
 
+// Checks if a predecessor is still alive
+// if not, it sets the predecessor to nil, so it can be replaced
 func (n *Node) checkPredecessor() {
 	if n.Predecessor != nil {
 		add := fmt.Sprintf("%s:%d", n.Predecessor.Address, n.Predecessor.Port)
@@ -218,17 +229,27 @@ func (n *Node) checkPredecessor() {
 	}
 }
 
+// Find the closest node
 func (n *Node) closestPrecedingNode(id *big.Int) *Node {
+
 	for i := m - 1; i >= 0; i-- {
+
 		if n.FingerTable[i] != nil {
+
+			// If this finger is between "me" and the "target"
 			if between(n.FingerTable[i].Id, n.Id, id) {
+				// This takes us closer to the target
+				// so we jump there
 				return n.FingerTable[i]
 			}
 		}
 	}
+
+	// if all fingers fail, return self
 	return n
 }
 
+// Check if id is in the correct range
 func between(id, start, end *big.Int) bool {
 	// if end > start (== 1)
 	if end.Cmp(start) == 1 {
@@ -240,15 +261,18 @@ func between(id, start, end *big.Int) bool {
 	}
 }
 
+// if the new node is a better fit to be the new predecessor that the current one
 func (n *Node) notify(nprim *Node) {
 	if n.Predecessor == nil || between(nprim.Id, n.Predecessor.Id, n.Id) {
 		n.Predecessor = nprim
 	}
 }
 
+// Iterates through the ring until the responsible node is found
 func find(Id *big.Int, start *Node) *Node {
 	found, nextNode := false, start
 	i := 0
+	// prevent infinite loops if the ring is broken
 	for !found && i < 10 {
 		found, nextNode = nextNode.findSucc(Id)
 		i += 1
@@ -268,32 +292,85 @@ func (n *Node) Put(args *StoreArg, reply *StoreReply) error {
 	return nil
 }
 
-func (n *Node) delete(args *StoreArg, reply *StoreReply) error {
-	n.remove(args.Key, args.FileContent)
-
-	reply.Success = true
-	return nil
-}
-
+// lists files from current node that matches more closely to an id
 func (n *Node) getFilesPred(id *big.Int) map[string][]byte {
 
+	//make new map
 	mfiles := make(map[string][]byte)
 
+	//go through files
 	for key, value := range n.bucket {
+		//convert key (string) to big int
 		keyBig := new(big.Int)
 		keyBig.SetString(key, 10)
 
-		if keyBig.Cmp(id) <= 0 {
-			mfiles[key] = value
-		} else {
-			maggot := fmt.Sprintf("BRUH %d is bigger than %d no cap!!!", id, keyBig)
-			fmt.Printf(maggot)
+		//check if key matches other id better
 
+		shouldKeep := between(keyBig, id, n.Id)
+
+		if !shouldKeep {
+			//copy over keys and values to new map and delete from our nodes map
+			mfiles[key] = value
+			delete(n.bucket, key)
 		}
 
 	}
+	//return t
 
 	return mfiles
+}
+
+func (n *Node) getFile(targetNode *Node, fileName string) []byte {
+
+	// convert filename to hash
+	key := hashString(fileName)
+	// convert hash into string of hash
+	keyStr := fmt.Sprintf("%d", key)
+
+	// if the file is on the local node
+	if targetNode.Id == n.Id {
+		n.mu.Lock()
+		defer n.mu.Unlock()
+		return n.bucket[keyStr]
+	}
+
+	args := GetFileArgs{keyStr}
+	reply := GetFileReply{}
+
+	// combine port + address into one string
+	add := fmt.Sprintf("%s:%d", targetNode.Address, targetNode.Port)
+
+	// connect to the other node and get the data
+	ok := call("Node.GetFileRPC", add, args, &reply)
+	if !ok {
+		fmt.Println("Couldnt perform RPC on GetFile")
+	}
+
+	return reply.Data
+}
+
+func (n *Node) GetFileRPC(args *GetFileArgs, reply *GetFileReply) error {
+
+	// Lock before accessing state
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	// if target node bucket doesnt contain any files
+	if len(n.bucket) == 0 {
+		fmt.Printf("bucket is empty\n")
+		return nil
+
+	} else {
+		// grab file from bucket and check
+		data, exists := n.bucket[args.FileName]
+		if exists {
+			reply.Data = data
+		} else {
+			fmt.Println("File doesnt exist")
+		}
+	}
+
+	return nil
 }
 
 func (n *Node) GetFilesPredRPC(args *GetFilesArgs, reply *GetFilesReply) error {
@@ -302,7 +379,7 @@ func (n *Node) GetFilesPredRPC(args *GetFilesArgs, reply *GetFilesReply) error {
 	defer n.mu.Unlock()
 
 	if len(n.bucket) == 0 {
-		fmt.Printf("bucket is empty")
+		//fmt.Printf("bucket is empty")
 		return nil
 
 	} else {
@@ -312,35 +389,28 @@ func (n *Node) GetFilesPredRPC(args *GetFilesArgs, reply *GetFilesReply) error {
 	return nil
 }
 
+// Store data to the local bucket map
 func (n *Node) Store(key *big.Int, data []byte) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
+	// if the bucket is not defined
 	if n.bucket == nil {
 		n.bucket = make(map[string][]byte)
 	}
 
+	// convert hash to string
 	str := fmt.Sprintf("%d", key)
-	n.bucket[str] = data
+	n.bucket[str] = data // store file
 }
 
-func (n *Node) remove(key *big.Int, data []byte) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	if n.bucket == nil {
-		n.bucket = make(map[string][]byte)
-	}
-
-	str := fmt.Sprintf("%d", key)
-	delete(n.bucket, str)
-}
-
+// gets the curreent node's predecessor
 func (n *Node) GetPredecessorRPC(args *GetPredArgs, reply *GetPredReply) error {
 	// Lock before accessing state
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
+	//
 	if n.Predecessor != nil {
 		reply.Node = NodeDetails{
 			Address: n.Predecessor.Address,
@@ -359,6 +429,7 @@ func (n *Node) GetPredecessorRPC(args *GetPredArgs, reply *GetPredReply) error {
 }
 
 func (n *Node) getPredecessor() *Node {
+	// if its the local node
 	if n.Address == node.Address && n.Port == node.Port {
 		return n.Predecessor
 	}
@@ -382,7 +453,8 @@ func (n *Node) getPredecessor() *Node {
 }
 
 func (n *Node) notifyRemote(nprim *Node) {
-	if n.Address == node.Address && n.Port == node.Port {
+	// if the target node is the local node
+	if n.Address == nprim.Address && n.Port == nprim.Port {
 		n.notify(nprim)
 		return
 	}
@@ -397,10 +469,11 @@ func (n *Node) notifyRemote(nprim *Node) {
 
 	reply := NotifyReply{}
 
+	// combine port + address into one string
 	address := fmt.Sprintf("%s:%d", n.Address, n.Port)
 	ok := call("Node.NotifyRPC", address, &args, &reply)
 	if !ok {
-		fmt.Println("Unable to notify RPC")
+		fmt.Println("Unable perform notify RPC")
 		nprim.Successor = nprim
 	}
 
