@@ -65,10 +65,10 @@ func main() {
 	fmt.Print("> ")
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
-		fmt.Print("> ")
 		text := scanner.Text()
 		args := strings.Fields(text)
 		if len(args) == 0 {
+			fmt.Print(">")
 			continue
 		}
 
