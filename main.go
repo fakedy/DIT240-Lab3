@@ -171,6 +171,7 @@ func StoreFile(filePath string) {
 	if successor.Address == node.Address && successor.Port == node.Port {
 		// storage method
 		node.Store(key, data)
+		fmt.Println("Storing locally")
 	} else {
 
 		// Prepare RPC args and reply
@@ -188,7 +189,7 @@ func StoreFile(filePath string) {
 		} else if !reply.Success {
 			fmt.Printf("Failure")
 		} else {
-			fmt.Printf("File stored succesfully")
+			fmt.Printf("File remotely stored  succesfully")
 		}
 
 	}
