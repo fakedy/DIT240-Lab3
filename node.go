@@ -65,6 +65,14 @@ type NotifyReply struct {
 	Success bool
 }
 
+type GetFilesArgs struct {
+	PredId *big.Int
+}
+
+type GetFilesReply struct {
+	Files map[string][]byte
+}
+
 func (n *Node) findSucc(id *big.Int) (bool, *Node) {
 
 	// make rpc call to the target node findsuccessor function
@@ -155,6 +163,20 @@ func (n *Node) Join(nprim *Node) {
 	n.Predecessor = nil
 
 	_, n.Successor = nprim.findSucc(n.Id)
+
+	args := GetFilesArgs{n.Id}
+	reply := GetFilesReply{}
+
+	add := fmt.Sprintf("%s:%d", n.Address, n.Port)
+	ok := call("Node.GetFilesPredRPC", add, &args, &reply)
+	if !ok {
+		return
+	}
+
+	for key, value := range reply.Files {
+		n.bucket[key] = value
+	}
+
 }
 
 func (n *Node) stabilize() {
@@ -246,6 +268,42 @@ func (n *Node) Put(args *StoreArg, reply *StoreReply) error {
 	return nil
 }
 
+func (n *Node) delete(args *StoreArg, reply *StoreReply) error {
+	n.remove(args.Key, args.FileContent)
+
+	reply.Success = true
+	return nil
+}
+
+func (n *Node) getFilesPred(id *big.Int) map[string][]byte {
+
+	mfiles := make(map[string][]byte)
+
+	for key, value := range n.bucket {
+		if hashString(key).Cmp(id) <= 0 {
+			mfiles[key] = value
+		}
+
+	}
+
+	return mfiles
+}
+
+func (n *Node) GetFilesPredRPC(args *GetFilesArgs, reply *GetFilesReply) error {
+	// Lock before accessing state
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if len(n.bucket) == 0 {
+		return nil
+
+	} else {
+		reply.Files = n.getFilesPred(args.PredId)
+	}
+
+	return nil
+}
+
 func (n *Node) Store(key *big.Int, data []byte) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -256,6 +314,18 @@ func (n *Node) Store(key *big.Int, data []byte) {
 
 	str := fmt.Sprintf("%d", key)
 	n.bucket[str] = data
+}
+
+func (n *Node) remove(key *big.Int, data []byte) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if n.bucket == nil {
+		n.bucket = make(map[string][]byte)
+	}
+
+	str := fmt.Sprintf("%d", key)
+	delete(n.bucket, str)
 }
 
 func (n *Node) GetPredecessorRPC(args *GetPredArgs, reply *GetPredReply) error {
