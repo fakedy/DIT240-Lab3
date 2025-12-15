@@ -28,11 +28,10 @@ var (
 	tff      int
 	tcp      int
 	r        int
-	i		 string
+	i        string
 )
 
 func main() {
-
 
 	flag.StringVar(&IP, "a", "127.0.0.1", "Chord IP Address")
 	flag.IntVar(&port, "p", 8080, "Chord Port")
@@ -63,13 +62,15 @@ func main() {
 	go StabilizeRoutine(ts)
 	go FixFingersRoutine(tff)
 	go CheckPredecessorRoutine(tcp)
-
-	scanner := bufio.NewScanner(os.Stdin)
 	fmt.Print("> ")
+	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
-
+		fmt.Print("> ")
 		text := scanner.Text()
 		args := strings.Fields(text)
+		if len(args) == 0 {
+			continue
+		}
 
 		switch args[0] {
 		case "lookup":
@@ -100,7 +101,6 @@ func main() {
 		default:
 			fmt.Println("Unknown command.")
 		}
-
 		fmt.Print("> ")
 	}
 
@@ -108,15 +108,15 @@ func main() {
 
 func server(IP string, port int) *Node {
 	ipPortHash := hashString(fmt.Sprintf("%s:%d", IP, port))
-	if(i != ""){
+	if i != "" {
 		ipPortHash = hashString(i)
 	}
 
 	node := Node{
-		Address: IP,
-		Port:    port,
-		Id:      ipPortHash,
-		bucket:  make(map[string][]byte),
+		Address:     IP,
+		Port:        port,
+		Id:          ipPortHash,
+		bucket:      make(map[string][]byte),
 		FingerTable: make([]*Node, m),
 		Predecessor: nil,
 	}
@@ -185,7 +185,7 @@ func StoreFile(filePath string) {
 
 		if !ok {
 			fmt.Printf("RPC store failed")
-		} else if !reply.Success{
+		} else if !reply.Success {
 			fmt.Printf("Failure")
 		} else {
 			fmt.Printf("File stored succesfully")
@@ -203,14 +203,14 @@ func PrintState() {
 
 	// Successors list information
 	fmt.Println("\n---Successor List---")
-	if node.Successor != nil{
+	if node.Successor != nil {
 		fmt.Printf("[0] ID: %s | %s:%d\n", node.Successor.Id, node.Successor.Address, node.Successor.Port)
 	} else {
 		fmt.Println("[0] nil")
 	}
 
 	fmt.Println("\n---Predecessor List---")
-	if(node.Predecessor != nil) {
+	if node.Predecessor != nil {
 		fmt.Printf("[0] ID: %s | %s:%d\n", node.Predecessor.Id, node.Predecessor.Address, node.Predecessor.Port)
 	} else {
 		fmt.Println("[0] nil")
@@ -218,8 +218,8 @@ func PrintState() {
 
 	// Finger table information
 	fmt.Println("\n---Finger Table---")
-	for i, finger := range node.FingerTable{
-		if finger != nil{
+	for i, finger := range node.FingerTable {
+		if finger != nil {
 			fmt.Printf("[%d] ID: %s | %s:%d\n", i, finger.Id, finger.Address, finger.Port)
 		} else {
 			fmt.Printf("[%d] nil", i)
@@ -228,7 +228,7 @@ func PrintState() {
 
 	// Stored files
 	fmt.Println("\n---Stored Files---")
-	if len(node.bucket) == 0{
+	if len(node.bucket) == 0 {
 		fmt.Println("Empty")
 	} else {
 		for key, content := range node.bucket {
@@ -268,4 +268,3 @@ func CheckPredecessorRoutine(duration int) {
 	}
 
 }
-
